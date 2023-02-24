@@ -68,69 +68,107 @@ fn main() {
         break;
     }
 
+    // let test_energy_matrix: Vec<Vec<u8>> = vec![
+    //     vec![10,15,0,20,0,10],
+    //     vec![2,4,5,1,7,5],
+    //     vec![8,54,2,11,4,2],
+    //     vec![33,56,14,25,36,54]
+    // ];
 
-
+    // let seam = calculate_seam(test_energy_matrix.iter().map(|row| row.as_slice()).collect::<Vec<_>>().as_slice(), &SeamDirection::HORIZONTAL);
+    // println!("{:?}", seam);
 }
 
 fn calculate_seam(image_energy: &[&[u8]], seam_direction: &SeamDirection) -> Vec<usize> {
+    let mut rotated_matrix: Vec<Vec<u8>> = Vec::new();
 
-    // TODO implement directional seams
-
-    let mut paths: Vec<(u32, Vec<usize>)> = Vec::new();
-
-    for col_num in 0..image_energy[0].len() {
-        paths.push((u32::from(image_energy[0][col_num]), vec![col_num]));
+    match seam_direction {
+        SeamDirection::VERTICAL => {
+            for row in image_energy {
+                rotated_matrix.push(row.to_vec());
+            }
+        },
+        SeamDirection::HORIZONTAL => {
+            for col in (0..image_energy[0].len()).rev() {
+                let mut new_row: Vec<u8> = Vec::new();
+                for row in image_energy {
+                    new_row.push(row[col]);
+                }
+                rotated_matrix.push(new_row);
+            }
+        },
     }
+
+    let mut paths: Vec<Vec<(u32, Vec<usize>)>> = Vec::new();
+    // println!("{:?}", rotated_matrix);
+
+    for (row_num, row) in rotated_matrix.iter().enumerate() {
+        println!("{:?}", row_num);
+        println!("{:?}", row);
+        let mut to_add:Vec<(u32, Vec<usize>)> = Vec::new(); 
+        if row_num == 0 { 
+            for col_num in 0..rotated_matrix[0].len() {
+                to_add.push((u32::from(rotated_matrix[0][col_num]), vec![col_num]));
+            }
+        } else {
+            let mut temp_row: Vec<(u32, usize)> = Vec::new();
+
+            for (col_num, pixel) in row.iter().enumerate() {
+                let prev_col = get_col_num_to_update(col_num, paths[row_num - 1].as_slice());
+                temp_row.push((u32::from(*pixel), prev_col));
+            }
     
-    for (row_num, row) in image_energy.iter().enumerate() {
-        if row_num == 0 { continue; }
-
-        let mut temp_row: Vec<(u32, usize)> = Vec::new();
-
-        for (col_num, pixel) in row.iter().enumerate() {
-            let prev_col = get_col_num_to_update(row, col_num, &paths);
-            temp_row.push((u32::from(*pixel), prev_col));
+            for (col, (pixel_energy, prev_row_col)) in temp_row.iter().enumerate() {
+                
+                let selected_path = &paths[row_num - 1][*prev_row_col];
+                let mut new_path = Vec::new();
+                new_path.extend_from_slice(&selected_path.1);
+                new_path.push(col);
+                let tuple = (pixel_energy + selected_path.0, new_path);
+                to_add.push(tuple);
+            }
         }
-
-        for (col, (pixel_energy, prev_row_col)) in temp_row.iter().enumerate() {
-            match paths.get_mut(col) {
-                Some(path) => {
-                    path.0 += pixel_energy;
-                    path.1.push(*prev_row_col);
-                },
-                None => println!("Unable to find path element."),
-            };
-        }
-
+        paths.push(to_add);
     }
+
+    // println!("{:?}", paths);
 
     let mut min_col: usize = 0;
     let mut min_val: u32 = u32::MAX;
 
-    for (col,path) in paths.iter().enumerate() {
+    for (col,path) in paths[paths.len() - 1].iter().enumerate() {
         if path.0 < min_val {
             min_val = path.0;
             min_col = col;
         }
     }
 
-    paths[min_col].1.to_vec()
+    paths[paths.len() - 1][min_col].1.to_vec()
 
 }
 
-fn get_col_num_to_update(row: &[u8], col_num: usize, paths: &[(u32, Vec<usize>)]) -> usize {
+fn get_col_num_to_update(col_num: usize, paths: &[(u32, Vec<usize>)]) -> usize {
 
     let prev_row_pos = get_relative_pos(col_num, paths.len());
-    let min_pos: usize = match find_min_index(&vec![paths[prev_row_pos.0].0, paths[prev_row_pos.1].0, paths[prev_row_pos.2].0]) {
-        Some(index) => index,
-        None => {
-            println!("Warning: Minimum value not found. Setting index to 0.");
-            0
-        },
-    };
+    let min_pos: usize = get_min_energy_pos(paths, prev_row_pos);
+    min_pos
+}
 
-    let abs_col = min_pos + col_num - 1;
-    abs_col
+fn get_min_energy_pos(paths: &[(u32, Vec<usize>)], positions_to_check: (usize, usize, usize)) -> usize {
+
+    let pos_vec = vec![positions_to_check.0, positions_to_check.1, positions_to_check.2];
+
+    let mut min_pos: usize = 0;
+    let mut min_val: u32 = u32::MAX;
+
+    for pos in pos_vec {
+        if paths[pos].0 < min_val {
+            min_pos = pos;
+            min_val = paths[pos].0;
+        }
+    }
+
+    min_pos
 }
 
 fn get_relative_pos(col_num: usize, row_len: usize) -> (usize, usize, usize) {
@@ -141,28 +179,6 @@ fn get_relative_pos(col_num: usize, row_len: usize) -> (usize, usize, usize) {
     } else {
         return (col_num - 1, col_num, col_num + 1);
     }
-}
-
-fn find_min_index(slice: &[u32]) -> Option<usize> {
-    if slice.is_empty() {
-        // Return `None` if the slice is empty.
-        return None;
-    }
-    
-    // Initialize `min_index` to the first index in the slice.
-    let mut min_index = 0;
-
-    // Loop over the remaining indices in the slice.
-    for i in 1..slice.len() {
-        // If the value at index `i` is less than the value at index `min_index`,
-        // update `min_index` to `i`.
-        if slice[i] < slice[min_index] {
-            min_index = i;
-        }
-    }
-
-    // Return the index of the minimum value.
-    Some(min_index)
 }
 
 fn calculate_image_energy(image: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Vec<Vec<u8>> {

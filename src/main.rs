@@ -1,4 +1,4 @@
-use std::{io};
+use std::{io, fs::File};
 use image::{io::Reader, image_dimensions, ImageBuffer, Rgb};
 
 enum SeamDirection {
@@ -47,10 +47,15 @@ fn main() {
     // println!("{:?}", grey_img.get_pixel(10, 10));
     // println!("{:?}", image_energy);
 
-    let num_vert_seams = orig_width - new_width.parse::<u32>().unwrap();
-    let num_hori_seams = orig_height - new_height.parse::<u32>().unwrap();
+    let mut num_vert_seams = orig_width - new_width.parse::<u32>().unwrap();
+    let mut num_hori_seams = orig_height - new_height.parse::<u32>().unwrap();
 
-    let seam_direction: SeamDirection;
+    let frame = gif::Frame::from_rgb(orig_width as u16, orig_height as u16, &orig_img.as_raw());
+    let mut gif = File::create("images/target/result.gif").unwrap();
+    let mut encoder = gif::Encoder::new(&mut gif, frame.width, frame.height, &[]).unwrap();
+    encoder.write_frame(&frame).unwrap();
+
+    let mut seam_direction: SeamDirection;
     if num_vert_seams == 0 && num_hori_seams == 0 {
         println!("No seams to carve.");
         return;
@@ -61,18 +66,42 @@ fn main() {
     }
 
     let mut final_img = orig_img.clone();
-    // while num_vert_seams > 0 || num_hori_seams > 0 {
-        let image_energy = calculate_image_energy(&final_img);
+    let mut width = final_img.width();
+    let mut height = final_img.height();
+    while num_vert_seams > 0 || num_hori_seams > 0 {
+        let image_energy = calculate_image_energy(&final_img, width, height);
         let seam = calculate_seam(image_energy.iter().map(|row| row.as_slice()).collect::<Vec<_>>().as_slice(), &seam_direction);
-        
-        colour_seam(&mut final_img, seam, &seam_direction);
+        colour_seam(&mut final_img, &seam, &seam_direction);
+        let frame = gif::Frame::from_rgb(orig_width as u16, orig_height as u16, &final_img.as_raw());
+        encoder.write_frame(&frame).unwrap();
+        remove_seam(&mut final_img, &seam, &seam_direction);
+        let frame = gif::Frame::from_rgb(orig_width as u16, orig_height as u16, &final_img.as_raw());
+        encoder.write_frame(&frame).unwrap();
+
+        match seam_direction {
+            SeamDirection::VERTICAL => {
+                num_vert_seams -= 1;
+                width -= 1;
+                seam_direction = SeamDirection::HORIZONTAL;
+            },
+            SeamDirection::HORIZONTAL => {
+                num_hori_seams -= 1;
+                height -= 1;
+                seam_direction = SeamDirection::VERTICAL;
+            },
+        }
         // println!("{:?}", final_img);
+        // final_img.save("images/test.jpg").unwrap();
+        // println!("{:?}", final_img.into_raw().len());
 
 
-        final_img.save("images/test.jpg").unwrap();
+
+        
 
         // break;
-    // }
+    }
+
+    final_img.save("images/target/result.jpg").unwrap();
 
     // let test_energy_matrix: Vec<Vec<u8>> = vec![
     //     vec![10,15,0,20,0,10],
@@ -85,11 +114,35 @@ fn main() {
     // println!("{:?}", seam);
 }
 
-fn colour_seam(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, seam: Vec<usize>, seam_direction: &SeamDirection) -> () {
+fn remove_seam(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, seam: &[usize], seam_direction: &SeamDirection) -> () {
+    let width = image.width();
+    let height = image.height();
+    match seam_direction {
+        SeamDirection::VERTICAL => {
+            for (row_num, seam_col) in seam.iter().enumerate() {
+                for col in (*seam_col as u32)..(width-1) {
+                    let next_pixel = image.get_pixel(col + 1, row_num as u32);
+                    image.put_pixel(col, row_num as u32, *next_pixel);
+                }
+                image.put_pixel(width - 1 , row_num as u32, Rgb([255,255,255]));
+            }
+        },
+        SeamDirection::HORIZONTAL => {
+            for (col_num, seam_row) in seam.iter().enumerate() {
+                for row in (*seam_row as u32)..(height - 1) {
+                    let next_pixel = image.get_pixel(col_num as u32, row + 1);
+                    image.put_pixel(col_num as u32, row, *next_pixel);
+                }
+                image.put_pixel(col_num as u32, height - 1, Rgb([255,255,255]));
+            }
+        },
+    }
+}
+
+fn colour_seam(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, seam: &[usize], seam_direction: &SeamDirection) -> () {
 
     match seam_direction {
         SeamDirection::VERTICAL => {
-
             for (row, col) in seam.iter().enumerate() {
                 image.put_pixel(*col as u32, row as u32, Rgb([255,0,0]));
             }
@@ -204,9 +257,9 @@ fn get_relative_pos(col_num: usize, row_len: usize) -> (usize, usize, usize) {
     }
 }
 
-fn calculate_image_energy(image: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
-    let width = image.width();
-    let height = image.height();
+fn calculate_image_energy(image: &ImageBuffer<Rgb<u8>, Vec<u8>>, width: u32, height: u32) -> Vec<Vec<u8>> {
+    // let width = image.width();
+    // let height = image.height();
     let mut image_energy = vec![vec![0u8; width as usize]; height as usize];
     // println!("height: {}, width: {}", image_energy.len(), image_energy[0].len());
 

@@ -40,12 +40,6 @@ fn main() {
     new_height = new_height.trim().to_string();
 
     let orig_img = img.to_rgb8();
-    // let test = orig_img.get_pixel(10, 10);
-    // println!("{:?}", test);
-
-    // let grey_img = img.to_luma8();
-    // println!("{:?}", grey_img.get_pixel(10, 10));
-    // println!("{:?}", image_energy);
 
     let mut num_vert_seams = orig_width - new_width.parse::<u32>().unwrap();
     let mut num_hori_seams = orig_height - new_height.parse::<u32>().unwrap();
@@ -90,28 +84,9 @@ fn main() {
                 seam_direction = SeamDirection::VERTICAL;
             },
         }
-        // println!("{:?}", final_img);
-        // final_img.save("images/test.jpg").unwrap();
-        // println!("{:?}", final_img.into_raw().len());
-
-
-
-        
-
-        // break;
     }
 
     final_img.save("images/target/result.jpg").unwrap();
-
-    // let test_energy_matrix: Vec<Vec<u8>> = vec![
-    //     vec![10,15,0,20,0,10],
-    //     vec![2,4,5,1,7,5],
-    //     vec![8,54,2,11,4,2],
-    //     vec![33,56,14,25,36,54]
-    // ];
-
-    // let seam = calculate_seam(test_energy_matrix.iter().map(|row| row.as_slice()).collect::<Vec<_>>().as_slice(), &SeamDirection::HORIZONTAL);
-    // println!("{:?}", seam);
 }
 
 fn remove_seam(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, seam: &[usize], seam_direction: &SeamDirection) -> () {
@@ -176,11 +151,9 @@ fn calculate_seam(image_energy: &[&[u8]], seam_direction: &SeamDirection) -> Vec
     }
 
     let mut paths: Vec<Vec<(u32, Vec<usize>)>> = Vec::new();
-    // println!("{:?}", rotated_matrix);
 
     for (row_num, row) in rotated_matrix.iter().enumerate() {
-        // println!("{:?}", row_num);
-        // println!("{:?}", row);
+
         let mut to_add:Vec<(u32, Vec<usize>)> = Vec::new(); 
         if row_num == 0 { 
             for col_num in 0..rotated_matrix[0].len() {
@@ -206,8 +179,6 @@ fn calculate_seam(image_energy: &[&[u8]], seam_direction: &SeamDirection) -> Vec
         }
         paths.push(to_add);
     }
-
-    // println!("{:?}", paths);
 
     let mut min_col: usize = 0;
     let mut min_val: u32 = u32::MAX;
@@ -258,10 +229,7 @@ fn get_relative_pos(col_num: usize, row_len: usize) -> (usize, usize, usize) {
 }
 
 fn calculate_image_energy(image: &ImageBuffer<Rgb<u8>, Vec<u8>>, width: u32, height: u32) -> Vec<Vec<u8>> {
-    // let width = image.width();
-    // let height = image.height();
     let mut image_energy = vec![vec![0u8; width as usize]; height as usize];
-    // println!("height: {}, width: {}", image_energy.len(), image_energy[0].len());
 
     for row_number in 0..height {
 
@@ -275,9 +243,6 @@ fn calculate_image_energy(image: &ImageBuffer<Rgb<u8>, Vec<u8>>, width: u32, hei
             let bottom_pixel = image.get_pixel(column_number, bottom_pixel_row);
             let left_pixel = image.get_pixel(left_pixel_col, row_number);
             let right_pixel = image.get_pixel(right_pixel_col, row_number);
-            
-            // println!("row: {}, col: {}", row_number, column_number);
-
             image_energy[row_number as usize][column_number as usize] = calculate_pixel_energy(top_pixel, bottom_pixel, left_pixel, right_pixel);
         }
     }
